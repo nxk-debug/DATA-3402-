@@ -255,7 +255,4 @@ https://www.kaggle.com/competitions/playground-series-s3e23/submit
 
 - Kaggle Playground Series S3E23: https://www.kaggle.com/competitions/playground-series-s3e23
 - NASA Metrics Data Program: https://www.kaggle.com/datasets/semustafacevik/software-defect-prediction
-- Breiman, L. (2001). *Random Forests.* Machine Learning, 45(1), 5–32. https://doi.org/10.1023/A:1010933404324
-- McCabe, T. J. (1976). *A Complexity Measure.* IEEE Transactions on Software Engineering, SE-2(4), 308–320.
-- Halstead, M. H. (1977). *Elements of Software Science.* Elsevier North-Holland.
-- scikit-learn RandomForestClassifier: https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html
+
