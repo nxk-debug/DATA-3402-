@@ -10,7 +10,7 @@ The task, as defined by the Kaggle challenge, is to use 21 numerical software co
 
 The approach in this repository formulates the problem as a binary classification task. We apply a Random Forest Classifier with log1p feature transformation and standard scaling as preprocessing. The model is trained to output a defect probability score for each module rather than a hard binary label, which aligns with the AUC-based evaluation metric used by Kaggle.
 
-Our best model achieved a validation AUC of approximately **0.77**, meaning the model correctly ranks a defective module above a non-defective one 77% of the time. The competition metric is Area Under the ROC Curve (AUC), where a random baseline scores 0.50 and a perfect model scores 1.00.
+Our best model achieved a validation **AUC of 0.7700**, meaning the model correctly ranks a defective module above a non-defective one 77% of the time. The competition metric is Area Under the ROC Curve (AUC), where a random baseline scores 0.50 and a perfect model scores 1.00.
 
 ---
 
@@ -21,42 +21,45 @@ Our best model achieved a validation AUC of approximately **0.77**, meaning the 
 - **Type:**
   - Input: CSV file (`train.csv`) containing 21 numerical software complexity features per module
   - Output: Binary label in the `defects` column — `True` (defective) or `False` (non-defective)
-- **Size:** ~8 MB total (train + test CSV files)
+- **Size:** Training set: 101,763 rows × 23 columns | Test set: 67,842 rows × 22 columns (~8 MB total)
 - **Instances:**
   - Training: 71,234 rows (70%)
   - Validation: 15,264 rows (15%)
   - Hold-out Test: 15,265 rows (15%)
-  - Kaggle Test (unlabeled): 43,856 rows
+  - Kaggle Test (unlabeled): 67,842 rows
+- **Missing values:** None across all features in both train and test sets
 
 ---
 
 ### Preprocessing / Clean Up
 
-- **Duplicate removal:** Checked for and removed duplicate rows (none found in this dataset)
+- **Duplicate removal:** Checked for and removed duplicate rows — 0 duplicates found, all 101,763 rows retained
 - **Column drops:** Removed the `id` column (row identifier with no predictive signal)
 - **Target encoding:** Converted `defects` from boolean (`True`/`False`) to integer (`1`/`0`)
-- **Categorical check:** Verified no categorical features exist; all 21 features are numerical, so no one-hot encoding was needed
-- **Log1p transform:** Applied `log(1 + x)` to all features to compress heavy right-skewed distributions and reduce the influence of extreme outliers (e.g., modules with thousands of lines of code)
-- **StandardScaler:** Normalized all features to zero mean and unit variance so that no single feature dominates due to scale differences
+- **Categorical check:** All 21 features are numerical — no one-hot encoding required
+- **Log1p transform:** Applied `log(1 + x)` to all features to compress heavy right-skewed distributions and reduce the influence of extreme outliers (e.g., `e` ranges from 0 to 16,846,621)
+- **StandardScaler:** Normalized all features to zero mean and unit variance — confirmed by post-scaling statistics showing mean ≈ 0.00 and std = 1.00 for every feature
 
 ---
 
 ### Data Visualization
 
-**Class Distribution:**
+**Class Distribution**
 
-The dataset is imbalanced — approximately 77.3% of modules are non-defective and 22.7% are defective. A bar chart of the target confirms this. This imbalance means accuracy alone is a misleading metric; AUC is used instead.
+The dataset is imbalanced — 78,759 modules (77.3%) are non-defective and 23,004 modules (22.7%) are defective. This imbalance makes accuracy a misleading metric; AUC is used instead.
 
-**Feature Histograms by Class:**
+![Class Distribution](class_distribution.png)
 
-Histograms were plotted for all 21 features, with each chart overlaying the distribution of defective vs. non-defective modules. Key observations:
-- Features like `v(g)` (cyclomatic complexity), `loc` (lines of code), `branchCount`, `v` (Halstead volume), and `e` (Halstead effort) show clear separation between classes — defective modules consistently have higher values
-- Features like `lOBlank` (blank lines) and `l` (program level) show heavy overlap between classes, indicating weaker predictive power
-- All features are **right-skewed** before preprocessing, with a small number of very large, complex modules dominating the upper range
+**Feature Histograms by Class**
 
-**Before vs. After Preprocessing:**
+Histograms were plotted for all 21 features, overlaying defective vs. non-defective distributions. Key findings:
+- `v(g)`, `loc`, `branchCount`, `v`, `e`, and `t` show clear separation — defective modules consistently have higher values, confirming that complexity drives defects
+- `lOBlank` (blank lines) and `l` (program level) show heavy overlap — weaker predictive power
+- All features are right-skewed before preprocessing (e.g., `loc` ranges 1–3,442; `e` ranges 0–16,846,621)
 
-Side-by-side histograms for four representative features (`loc`, `v(g)`, `v`, `e`) were plotted before and after the log1p + StandardScaler transformation, confirming that distributions become significantly more symmetric and centered.
+**Before vs. After Preprocessing**
+
+Side-by-side histograms for `loc`, `v(g)`, `v`, and `e` confirm that after log1p + StandardScaler, distributions become significantly more symmetric and centered around zero.
 
 ---
 
@@ -69,71 +72,109 @@ Side-by-side histograms for four representative features (`loc`, `v(g)`, `v`, `e
 
 | Model | Reason for Choosing |
 |---|---|
-| Random Forest Classifier | Handles non-linear feature interactions, outputs calibrated probabilities, robust to outliers, provides feature importance rankings out of the box |
-
-A single model was used for this project. Random Forest was selected as it is a strong, interpretable baseline that naturally handles the tabular structure of this data without requiring extensive hyperparameter tuning.
+| Random Forest Classifier | Handles non-linear feature interactions, outputs calibrated probabilities for AUC scoring, robust to outliers, and provides feature importance rankings out of the box |
 
 **Hyperparameters:**
 
 | Parameter | Value | Reason |
 |---|---|---|
-| `n_estimators` | 200 | More trees = lower variance; 200 balances accuracy and compute time |
-| `class_weight` | `'balanced'` | Compensates for the 77/23 class imbalance by increasing the penalty for misclassifying defective modules |
+| `n_estimators` | 200 | More trees reduce variance; 200 balances accuracy and compute time |
+| `class_weight` | `'balanced'` | Compensates for the 77/23 class imbalance |
 | `max_depth` | `None` | Trees grow fully; ensemble averaging prevents overfitting |
 | `random_state` | 42 | Reproducibility |
-| `n_jobs` | -1 | Uses all available CPU cores for faster training |
+| `n_jobs` | -1 | Uses all available CPU cores |
 
-No explicit loss function is tuned by the user — Random Forest minimizes Gini impurity internally at each split.
+Random Forest minimizes Gini impurity internally at each split — no user-defined loss function.
 
 ---
 
 ### Training
 
-- **Software:** Python 3.13, scikit-learn, pandas, numpy, run in Jupyter Notebook
-- **Hardware:** Standard CPU (no GPU required — Random Forest does not use gradient descent)
-- **Training time:** Approximately 2–4 minutes for 200 trees on ~71,000 rows with 21 features
-- **Training curves:** Random Forest does not produce epoch-based loss curves. Performance was monitored by evaluating AUC on the validation set after training completed
-- **Stopping criterion:** Not applicable — Random Forest trains a fixed number of trees (`n_estimators=200`) and stops automatically
-- **Difficulties:**
-  - *Class imbalance:* The model initially predicted "no defect" for most samples due to the 77/23 split. Resolved by setting `class_weight='balanced'`
-  - *Skewed features:* Raw feature distributions were heavily right-skewed, which can mislead tree splits. Resolved with log1p transformation before training
+- **Software:** Python 3.13, scikit-learn, pandas, numpy — run in Jupyter Notebook
+- **Hardware:** Standard CPU (no GPU required)
+- **Training time:** ~2–4 minutes for 200 trees on 71,234 rows × 21 features
+- **Stopping criterion:** Fixed at `n_estimators=200` — no epoch-based stopping needed
+- **Difficulties encountered:**
+  - *Class imbalance:* Model initially predicted "no defect" for nearly all samples → resolved with `class_weight='balanced'`
+  - *Heavily skewed features:* Raw values like `e` up to 16 million distorted splits → resolved with log1p transformation
 
 ---
 
 ### Performance Comparison
 
-**Key Metric:** Area Under the ROC Curve (AUC) — chosen because it measures the model's ability to rank defective modules above non-defective ones at all classification thresholds, regardless of the class imbalance.
+**Key Metric:** Area Under the ROC Curve (AUC) — measures the model's ability to rank defective modules above non-defective ones across all thresholds, unaffected by class imbalance.
 
 | Split | AUC | Accuracy |
 |---|---|---|
-| Validation | ~0.77 | ~0.81 |
-| Hold-out Test | ~0.77 | ~0.81 |
+| Validation | **0.7700** | 0.8063 |
+| Hold-out Test | **0.7700** | ~0.81 |
 
-**Note on accuracy:** An accuracy of 0.81 is not particularly meaningful here because always predicting "no defect" would yield ~0.77 accuracy for free. AUC is the meaningful metric.
+> **Note:** Accuracy of 0.81 is misleading — always predicting "no defect" yields 0.77 accuracy for free. AUC is the only meaningful metric here.
 
-**Visualizations produced:**
-- ROC Curve on validation set (AUC annotated on plot)
-- Confusion Matrix on validation set showing true/false positives and negatives
-- Feature Importance bar chart showing `v(g)`, `loc`, `branchCount` as top predictors
+**Full Classification Report — Validation Set:**
+
+| Class | Precision | Recall | F1-Score | Support |
+|---|---|---|---|---|
+| No Defect (0) | 0.83 | 0.94 | 0.88 | 11,805 |
+| Defect (1) | 0.63 | 0.34 | 0.44 | 3,459 |
+| **Accuracy** | | | **0.81** | **15,264** |
+| Macro avg | 0.73 | 0.64 | 0.66 | 15,264 |
+| Weighted avg | 0.79 | 0.81 | 0.78 | 15,264 |
+
+---
+
+### Result Visualizations
+
+**ROC Curve**
+
+The ROC curve shows the model significantly outperforms random guessing (dashed diagonal line). The area under the blue curve = **0.7700**.
+
+![ROC Curve](roc_curve.png)
+
+**Confusion Matrix**
+
+At the default 0.5 threshold: 11,097 modules correctly identified as non-defective, 1,176 correctly identified as defective, 708 false alarms, and 2,283 missed defects.
+
+![Confusion Matrix](confusion_matrix.png)
+
+**Per-Class Precision / Recall / F1**
+
+The model performs strongly on the majority class (No Defect) but has lower recall on Defect (1). This is the core trade-off with class imbalance — at the default threshold the model catches 34% of actual defects at 63% precision.
+
+![Per-Class Metrics](per_class_metrics.png)
+
+**Feature Importances**
+
+`loc` (lines of code) is the single most important predictor at 0.138. Halstead metrics `v`, `i`, `e`, and `t` follow closely. Larger, more complex modules are significantly more defect-prone.
+
+| Rank | Feature | Importance | Description |
+|---|---|---|---|
+| 1 | `loc` | 0.1381 | Lines of Code |
+| 2 | `v` | 0.0683 | Halstead Volume |
+| 3 | `i` | 0.0598 | Halstead Intelligence |
+| 4 | `e` | 0.0560 | Halstead Effort |
+| 5 | `t` | 0.0553 | Halstead Time to Implement |
+
+![Feature Importance](feature_importance.png)
 
 ---
 
 ### Conclusions
 
-- A Random Forest Classifier trained on NASA software complexity metrics can predict software defects with an AUC of ~0.77, well above the 0.50 random baseline, demonstrating that these metrics carry real predictive signal
-- Defective software modules are consistently more complex — higher cyclomatic complexity, more lines of code, and more branching are the strongest indicators of defects
-- Class imbalance is a significant challenge; simply predicting the majority class yields high accuracy but is practically useless. Addressing imbalance explicitly (via `class_weight='balanced'`) is essential
-- Log1p transformation meaningfully improves data quality by compressing the extreme right skew present in all features
+- A Random Forest trained on NASA software complexity metrics achieves **AUC = 0.7700**, well above the 0.50 random baseline — these metrics carry real predictive signal
+- Defective modules are consistently more complex: higher `loc`, `v(g)`, Halstead metrics, and `branchCount`
+- Class imbalance (77/23) is the primary challenge — `class_weight='balanced'` was essential to avoid the model ignoring the defect class entirely
+- Log1p transformation was critical — without it, extreme outliers (e.g., `e` up to 16 million) would dominate feature splits
 
 ---
 
 ### Future Work
 
-- **Try gradient boosting models** (XGBoost, LightGBM, CatBoost) — these consistently outperform Random Forest on tabular Kaggle competitions and could push AUC above 0.80
-- **Apply SMOTE** (Synthetic Minority Oversampling Technique) as an alternative approach to handle class imbalance and compare against `class_weight='balanced'`
-- **Tune the decision threshold** — the default 0.5 cutoff is not optimal when classes are imbalanced; tuning it can significantly improve recall on defective modules
-- **Feature engineering** — create interaction terms (e.g., `v(g) × loc`) or ratios that may capture defect risk better than individual features
-- **Cross-validation** — use k-fold cross-validation instead of a single train/val split for more reliable performance estimates
+- **Gradient boosting models** (XGBoost, LightGBM, CatBoost) — consistently outperform Random Forest on tabular Kaggle tasks and could push AUC above 0.80
+- **SMOTE** — synthetic oversampling of defective modules as an alternative to class weights
+- **Threshold tuning** — adjusting the 0.5 decision cutoff to improve recall on defective modules (the more dangerous type of miss)
+- **Feature engineering** — interaction terms such as `v(g) × loc` or complexity ratios
+- **K-fold cross-validation** — more reliable performance estimates than a single train/val split
 
 ---
 
@@ -143,14 +184,19 @@ No explicit loss function is tuned by the user — Random Forest minimizes Gini 
 
 ```
 software-defect-prediction/
-├── Software_Defect_Prediction.ipynb   # Main notebook: all steps from loading to submission
-├── train.csv                          # Training data — download from Kaggle (see below)
-├── test.csv                           # Kaggle test data — download from Kaggle (see below)
-├── submission.csv                     # Generated automatically when notebook is run
-└── README.md                          # This file
+├── Untitled.ipynb               # Main notebook: all steps from loading to submission
+├── train.csv                    # Training data — download from Kaggle (see below)
+├── test.csv                     # Kaggle test data — download from Kaggle (see below)
+├── submission.csv               # Generated automatically when notebook is run
+├── class_distribution.png      # Class balance chart
+├── roc_curve.png                # ROC curve chart
+├── confusion_matrix.png         # Confusion matrix chart
+├── feature_importance.png       # Feature importance chart
+├── per_class_metrics.png        # Per-class precision/recall/F1 chart
+└── README.md                    # This file
 ```
 
-- `united.ipynb` — The single notebook containing all project steps: data loading, feature analysis, visualization, preprocessing, model training, evaluation, and Kaggle submission file generation. Each section is clearly labeled with markdown headers and inline comments.
+`Untitled.ipynb` — The single notebook containing all project steps: data loading, feature analysis table, class balance check, histograms by class, before/after preprocessing plots, model training, full evaluation metrics (AUC, accuracy, classification report, ROC, confusion matrix, feature importance), and Kaggle submission file generation.
 
 ---
 
@@ -166,33 +212,50 @@ seaborn
 scikit-learn
 jupyter
 ```
+
+**Install all at once:**
+
+```bash
+pip install pandas numpy matplotlib seaborn scikit-learn jupyter
+```
+
+No custom packages required. Can also be run on [Google Colab](https://colab.research.google.com/) with no setup — all packages are pre-installed.
+
 ---
 
 ### Data
 
-1. Go to the Kaggle competition data page: https://www.kaggle.com/competitions/playground-series-s3e23/data
+1. Go to: https://www.kaggle.com/competitions/playground-series-s3e23/data
 2. Accept the competition rules (free Kaggle account required)
 3. Download `train.csv` and `test.csv`
-4. Place both files in the same directory as `Untitled.ipynb`
-
-No additional preprocessing scripts are needed — all preprocessing is handled inside the notebook.
+4. Place both files in the **same directory** as `Untitled.ipynb`
 
 ---
 
+### Training
+
+```bash
+git clone https://github.com/<your-username>/software-defect-prediction.git
+cd software-defect-prediction
+jupyter notebook Untitled.ipynb
+```
+
+Run all cells: **Kernel → Restart & Run All**. Training completes in ~2–4 minutes on a standard CPU.
+
+---
 
 ### Performance Evaluation
 
-All metrics are computed and displayed automatically inside the notebook after training:
-
-- **AUC score** on the validation set (primary Kaggle metric) — printed to output
-- **Accuracy** on the validation set — printed to output
-- **Full classification report** (precision, recall, F1 per class) — printed to output
-- **ROC Curve** — plotted inline
-- **Confusion Matrix** — plotted inline
-- **Feature Importance chart** — plotted inline
-
-The `submission.csv` generated at the end of the notebook can be submitted directly to Kaggle at:
+All metrics are printed and plotted automatically inside the notebook after training. The `submission.csv` generated at the end can be submitted directly at:
 https://www.kaggle.com/competitions/playground-series-s3e23/submit
 
 ---
 
+## Citations
+
+- Kaggle Playground Series S3E23: https://www.kaggle.com/competitions/playground-series-s3e23
+- NASA Metrics Data Program: https://www.kaggle.com/datasets/semustafacevik/software-defect-prediction
+- Breiman, L. (2001). *Random Forests.* Machine Learning, 45(1), 5–32. https://doi.org/10.1023/A:1010933404324
+- McCabe, T. J. (1976). *A Complexity Measure.* IEEE Transactions on Software Engineering, SE-2(4), 308–320.
+- Halstead, M. H. (1977). *Elements of Software Science.* Elsevier North-Holland.
+- scikit-learn RandomForestClassifier: https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html
